@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Cube Game</title>
+    <!-- <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #gameOverScreen, #startScreen { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; display: none; }
+        #startButton, #restartButton { background-color: green; color: white; padding: 10px; border: none; cursor: pointer; }
+        #pauseButton { position: absolute; top: 20px; right: 20px; background-color: green; color: white; padding: 10px; border: none; cursor: pointer; display: none; }
+    </style> -->
+</head>
+<body>
+<!--    <div id="lifeCounter" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 20px;">Lives: &#10084;&#10084;&#10084;&#10084;&#10084;</div>
+    <div id="scoreCounter" style="position: absolute; top: 10px; right: 10px; color: white; font-size: 20px;">Score: 0</div>
+    <div id="startScreen">
+        <p>Click and drag to change the scene. Press the pause button to pause the game.</p>
+        <button id="startButton" style="background-color: green;">Start Game</button>
+    </div>
+    <div id="gameOverScreen">
+        <img src="https://as2.ftcdn.net/v2/jpg/02/11/54/33/1000_F_211543376_kv7x0SwdITkWbqajGzglhcvZV25AsPsS.jpg" alt="Game Over">
+        <button id="restartButton" style="background-color: green;">Restart Game</button>
+    </div>
+    <button id="pauseButton">Pause</button> -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Basic setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Skybox with new links
+        const loader = new THREE.CubeTextureLoader();
+        const texture = loader.load([
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/nx.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/ny.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/nz.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/px.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/py.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/pz.png'
+        ]);
+        scene.background = texture;
+
+        // Generate a simple colored texture for the car (player)
+        function generateCarTexture(color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.fillStyle = color;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Generate a simple colored texture for the bomb (obstacle)
+        function generateBombTexture(color) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 64;
+            canvas.height = 64;
+            const context = canvas.getContext('2d');
+            context.fillStyle = color;
+            context.beginPath();
+            context.arc(canvas.width / 2, canvas.height / 2, canvas.width / 2, 0, Math.PI * 2);
+            context.fill();
+            return new THREE.CanvasTexture(canvas);
+        }
+
+        // Use the generated textures for the car and bomb objects
+        const playerTexture = generateCarTexture('#ff0000'); // Red color for the car
+        const obstacleTexture = generateBombTexture('#0000ff'); // Blue color for the bomb
+
+        // Player cube with image
+        const playerGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        const playerMaterial = new THREE.MeshBasicMaterial({ map: playerTexture });
+        const playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
+        scene.add(playerCube);
+
+        // Platform
+        const platformGeometry = new THREE.BoxGeometry(10, 1, 0.2);
+        const platformMaterial = new THREE.MeshBasicMaterial({ color: 0x8c8c8c });
+        const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+        platform.position.y = -0.6;
+        platform.rotation.x = Math.PI / 2; // Rotate the platform to be horizontal
+        scene.add(platform);
+
+        // Set player cube on the platform
+        const playerCubeHeight = 0.4;
+        playerCube.position.y = platform.position.y + playerCubeHeight / 2;
+
+        // Adjust camera position for a front view
+        camera.position.set(0, 2, 10);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+        animate();
+        // document.getElementById('startButton').addEventListener('click', () => {
+        //     document.getElementById('startScreen').style.display = 'none';
+        //     animate();
+        // });
+
+        // Adjust renderer to cover full screen without white patches
+        // window.addEventListener('resize', function() {
+        //     camera.aspect = window.innerWidth / window.innerHeight;
+        //     camera.updateProjectionMatrix();
+        //     renderer.setSize(window.innerWidth, window.innerHeight);
+        // });
+    </script>
+</body>
+</html>

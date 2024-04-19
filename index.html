@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Cube Game</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="lifeCounter" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 20px;">Lives: &#10084;&#10084;&#10084;&#10084;&#10084;</div>
+    <div id="scoreCounter" style="position: absolute; top: 10px; right: 10px; color: white; font-size: 20px;">Score: 0</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Basic setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+        
+        // Skybox with new links
+        const loader = new THREE.CubeTextureLoader();
+        const texture = loader.load([
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/nx.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/ny.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/nz.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/px.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/py.png',
+            'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/pz.png'
+        ]);
+        scene.background = texture;
+
+        // Function to create a canvas texture
+        function createTexture(draw) {
+            const size = 64; // Texture size
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            const context = canvas.getContext('2d');
+            draw(context, size); // Draw the texture
+            return new THREE.CanvasTexture(canvas); // Create and return a THREE.js texture
+        }
+
+        // Generate car texture
+        const carTexture = createTexture((ctx, size) => {
+            // Car body
+            ctx.fillStyle = '#FF0000'; // Red color
+            ctx.fillRect(size * 0.2, size * 0.3, size * 0.6, size * 0.4);
+            // Car windows
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(size * 0.3, size * 0.35, size * 0.4, size * 0.2);
+        });
+
+        // Generate bomb texture
+        const bombTexture = createTexture((ctx, size) => {
+            // Bomb body
+            ctx.fillStyle = '#000000'; // Black color
+            ctx.beginPath();
+            ctx.arc(size / 2, size / 2, size / 3, 0, Math.PI * 2);
+            ctx.fill();
+            // Fuse
+            ctx.fillStyle = '#FFA500'; // Orange color for the fuse
+            ctx.fillRect(size * 0.45, size * 0.1, size * 0.1, size * 0.2);
+        });
+
+        // Player cube with image
+        const playerGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        const playerMaterial = new THREE.MeshBasicMaterial({ map: carTexture }); // Use dynamically generated car texture
+        const playerCube = new THREE.Mesh(playerGeometry, playerMaterial);
+        scene.add(playerCube);
+
+        // Platform
+        const platformGeometry = new THREE.BoxGeometry(10, 1, 0.2);
+        const platformMaterial = new THREE.MeshBasicMaterial({ color: 0x8c8c8c });
+        const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+        platform.position.y = -0.6;
+        platform.rotation.x = Math.PI / 2; // Rotate the platform to be horizontal
+        scene.add(platform);
+
+        // Set player cube on the platform
+        const playerCubeHeight = 0.4;
+        playerCube.position.y = platform.position.y + playerCubeHeight / 2;
+
+        // Adjust camera position for a front view
+        camera.position.set(0, 5, 10);
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+
+        // Obstacle cubes
+        const obstacles = [];
+        const obstacleMaterial = new THREE.MeshBasicMaterial({ map: bombTexture }); // Use dynamically generated bomb texture
+
+        let gameOver = false;
+        let baseSpeed = 0.05; // Starting speed for red blocks
+        let speedIncrease = 0.001; // Speed increase factor
+        let speedIncreaseRate = 0.0001; // Rate of speed increase
+
+        function addObstacle() {
+            const obstacleGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+            const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacle.position.x = 8; // Start red blocks from the right side
+            obstacle.position.y = platform.position.y + playerCubeHeight / 2;
+            // Assign initial speed and increase gradually
+            obstacle.speed = baseSpeed + Math.random() * speedIncrease;
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        // Controls
+        const velocity = { x: 0, y: 0 };
+        const onKeyPress = function(event) {
+            if (event.code === 'ArrowLeft') velocity.x = -0.1;
+            if (event.code === 'ArrowRight') velocity.x = 0.1;
+            if (event.code === 'Space') {
+                velocity.y = 0.2;
+                event.preventDefault(); // Prevent default spacebar behavior (scrolling)
+            }
+        };
+        const onKeyRelease = function(event) {
+            if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') velocity.x = 0;
+            if (event.code === 'Space') velocity.y = 0;
+        };
+        document.addEventListener('keydown', onKeyPress);
+        document.addEventListener('keyup', onKeyRelease);
+
+        // Initialize life and score counters
+        let lives = 5;
+        let score = 0;
+
+        function updateLifeCounter() {
+            const hearts = `<span style="color: red;">&#10084;</span>`.repeat(lives);
+            document.getElementById('lifeCounter').innerHTML = `Lives: ${hearts}`;
+        }
+
+        function updateScoreCounter() {
+            document.getElementById('scoreCounter').innerText = `Score: ${score}`;
+        }
+
+        updateLifeCounter();
+        updateScoreCounter();
+
+        function animate() {
+            if (gameOver) return; // Stop the game if gameOver is true
+
+            requestAnimationFrame(animate);
+
+            // Player movement
+            playerCube.position.x += velocity.x;
+            playerCube.position.y += velocity.y;
+
+            // Simple gravity
+            if (playerCube.position.y > platform.position.y + (playerCubeHeight / 2)) {
+                velocity.y -= 0.01;
+            } else {
+                playerCube.position.y = platform.position.y + (playerCubeHeight / 2);
+                velocity.y = 0;
+            }
+
+            // Bound green block's movement within the length of the platform
+            if (playerCube.position.x < -4.8) {
+                playerCube.position.x = -4.8;
+            } else if (playerCube.position.x > 4.8) {
+                playerCube.position.x = 4.8;
+            }
+
+            // Spawn obstacles
+            if (Math.random() < 0.01) addObstacle();
+
+            // Obstacles movement
+            obstacles.forEach((obstacle, index) => {
+                obstacle.position.x -= obstacle.speed;
+                if (obstacle.position.x < -8) {
+                    scene.remove(obstacle);
+                    obstacles.splice(index, 1);
+                    score += 1;
+                    updateScoreCounter();
+                }
+            });
+
+            // Collision detection and update counters
+            obstacles.forEach((obstacle, index) => {
+                if (obstacle.position.x < playerCube.position.x + 0.4 && obstacle.position.x > playerCube.position.x - 0.4 &&
+                    obstacle.position.y < playerCube.position.y + 0.4 && obstacle.position.y > playerCube.position.y - 0.4) {
+                    scene.remove(obstacle);
+                    obstacles.splice(index, 1);
+                    lives -= 1;
+                    updateLifeCounter();
+                    if (lives === 0) {
+                        gameOver = true;
+                        alert('Game Over!');
+                        score = 0;
+                        updateScoreCounter();
+                        return;
+                    }
+                }
+            });
+
+            // Gradually increase the speed of red blocks
+            speedIncrease += speedIncreaseRate;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        document.addEventListener('mousemove', function(event) {
+            const halfWidth = window.innerWidth / 2;
+            const halfHeight = window.innerHeight / 2;
+
+            // Normalize mouse position (-1 to 1)
+            const mouseX = (event.clientX - halfWidth) / halfWidth;
+            const mouseY = -(event.clientY - halfHeight) / halfHeight;
+
+            // Adjust camera movement range for a more pronounced effect
+            const cameraLookRange = 5; // Higher range for more movement
+            camera.position.x = mouseX * cameraLookRange;
+            camera.position.y = -mouseY * cameraLookRange + 5;
+
+            camera.lookAt(new THREE.Vector3(0, 0, 0));
+        });
+    </script>
+</body>
+</html>

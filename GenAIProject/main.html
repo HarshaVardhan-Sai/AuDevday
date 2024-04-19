@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>3D Cube Game</title>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <div id="lifeCounter" style="position: absolute; top: 10px; left: 10px; color: white; font-size: 20px;">Lives: &#10084;&#10084;&#10084;&#10084;&#10084;</div>
+    <div id="scoreCounter" style="position: absolute; top: 10px; right: 10px; color: white; font-size: 20px;">Score: 0</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+    // Basic setup
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+ 
+    // Skybox with new links
+    const loader = new THREE.CubeTextureLoader();
+    const texture = loader.load([
+        'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/nx.png',
+        'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/ny.png',
+        'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/nz.png',
+        'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/px.png',
+        'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/py.png',
+        'https://devday2.s3.ap-south-1.amazonaws.com/Capehill/pz.png'
+    ]);
+    scene.background = texture;
+ 
+    // Load textures for images
+    const textureLoader = new THREE.TextureLoader();
+    const playerTexture = textureLoader.load('path_to_green_image.png'); // Placeholder path for green block image
+
+    // Player model (bmw326_SCR1.glb)
+    let playerCube;
+    const playerLoader = new THREE.GLTFLoader();
+    playerLoader.load('assets/bmw326_SCR1.glb', function (gltf) {
+        scene.remove(playerCube); // Remove the existing player cube
+        playerCube = gltf.scene; // Set the player model as the new playerCube
+        playerCube.position.y = -0.6 + 0.4 / 2; // Adjust player model position
+        scene.add(playerCube);
+    }, undefined, function (error) {
+        console.error(error);
+    });
+
+    // Platform
+    const platformGeometry = new THREE.BoxGeometry(10, 1, 0.2);
+    const platformMaterial = new THREE.MeshBasicMaterial({ color: 0x8c8c8c });
+    const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+    platform.position.y = -0.6;
+    platform.rotation.x = Math.PI / 2; // Rotate the platform to be horizontal
+    scene.add(platform);
+ 
+    // Adjust camera position for a front view
+    camera.position.set(0, 5, 10);
+    camera.lookAt(new THREE.Vector3(0, 0, 0));
+ 
+    // Obstacle cubes replaced with soccer ball model
+    const obstacles = [];
+    let obstacleTexture; // Placeholder for soccer ball texture
+    const ballLoader = new THREE.GLTFLoader();
+    ballLoader.load('assets/soccerball.glb', function (gltf) {
+        obstacleTexture = gltf.scene;
+    }, undefined, function (error) {
+        console.error(error);
+    });
+ 
+    let gameOver = false;
+    let baseSpeed = 0.05; // Starting speed for soccer balls
+    let speedIncrease = 0.001; // Speed increase factor
+    let speedIncreaseRate = 0.0001; // Rate of speed increase
+
+    function addObstacle() {
+        const obstacleGeometry = new THREE.BoxGeometry(0.4, 0.4, 0.4);
+        const obstacle = new THREE.Mesh(obstacleGeometry, new THREE.MeshBasicMaterial({map: obstacleTexture}));
+        obstacle.position.x = 8; // Start soccer balls from the right side
+        obstacle.position.y = platform.position.y + 0.4 / 2;
+        // Assign initial speed and increase gradually
+        obstacle.speed = baseSpeed + Math.random() * speedIncrease;
+        scene.add(obstacle);
+        obstacles.push(obstacle);
+    }
+ 
+    // Controls
+    const velocity = { x: 0, y: 0 };
+    const onKeyPress = function(event) {
+        if (event.code === 'ArrowLeft') velocity.x = -0.1;
+        if (event.code === 'ArrowRight') velocity.x = 0.1;
+        if (event.code === 'Space') {
+            velocity.y = 0.2;
+            event.preventDefault(); // Prevent default spacebar behavior (scrolling)
+        }
+    };
+    const onKeyRelease = function(event) {
+        if (event.code === 'ArrowLeft' || event.code === 'ArrowRight') velocity.x = 0;
+        if (event.code === 'Space') velocity.y = 0;
+    };
+    document.addEventListener('keydown', onKeyPress);
+    document.addEventListener('keyup', onKeyRelease);
+ 
+    // Initialize life and score counters
+    let lives = 5;
+    let score = 0;
+
+    // Function to update the life counter display
+    function updateLifeCounter() {
+    const hearts = `<span style="color: red;">&#10084;</span>`.repeat(lives);
+    document.getElementById('lifeCounter').innerHTML = `Lives: ${hearts}`;
+}
+
+
+    // Function to update the score counter display
+    function updateScoreCounter() {
+        document.getElementById('scoreCounter').innerText = `Score: ${score}`;
+    }
+
+    // Call these functions initially to display the counters
+    updateLifeCounter();
+    updateScoreCounter();
+ 
+    // Animation loop
+    function animate() {
+        if (gameOver) return; // Stop the game if gameOver is true
+
+        requestAnimationFrame(animate);
+
+        // Player movement
+        if (playerCube.position) { // Check if playerCube is loaded
+            playerCube.position.x += velocity.x;
+            playerCube.position.y += velocity.y;
+        }
+ 
+        // Simple gravity
+        if (playerCube.position && playerCube.position.y > platform.position.y + (0.4 / 2)) {
+            velocity.y -= 0.01;
+        } else if (playerCube.position) {
+            playerCube.position.y = platform.position.y + (0.4 / 2);
+            velocity.y = 0;
+        }
+ 
+        // Bound player model's movement within the length of the platform
+        if (playerCube.position && playerCube.position.x < -4.8) { // Bound the player model to the left edge of the platform
+            playerCube.position.x = -4.8;
+        } else if (playerCube.position && playerCube.position.x > 4.8) { // Bound the player model to the right edge of the platform
+            playerCube.position.x = 4.8;
+        }
+
+        // Spawn obstacles
+        if (Math.random() < 0.01) addObstacle();
+ 
+        // Obstacles movement
+        obstacles.forEach((obstacle, index) => {
+            obstacle.position.x -= obstacle.speed; // Use the obstacle's speed
+            if (obstacle.position.x < -8) { // Check if soccer ball exits the platform
+                scene.remove(obstacle); // Remove soccer ball from the scene
+                obstacles.splice(index, 1); // Remove soccer ball from the obstacles array
+                score += 1; // Increase score when soccer ball exits the platform without collision
+                updateScoreCounter(); // Update the score counter display
+            }
+        });
+
+        // Collision detection and update counters
+        obstacles.forEach((obstacle, index) => {
+            if (playerCube.position && obstacle.position.x < playerCube.position.x + 0.4 && obstacle.position.x > playerCube.position.x - 0.4 &&
+                obstacle.position.y < playerCube.position.y + 0.4 && obstacle.position.y > playerCube.position.y - 0.4) {
+                // Collision detected
+                scene.remove(obstacle); // Remove the soccer ball
+                obstacles.splice(index, 1); // Remove it from the array
+                lives -= 1; // Decrease life
+                updateLifeCounter(); // Update the life counter display
+                if (lives === 0) {
+                    // Handle game over scenario
+                    gameOver = true;
+                    alert('Game Over!');
+                    score = 0; // Set score to zero to prevent negative values
+                    updateScoreCounter();
+                    return; // Stop the animation loop
+                }
+            }
+        });
+ 
+        // Gradually increase the speed of soccer balls
+        speedIncrease += speedIncreaseRate; // Increase speed gradually
+
+        renderer.render(scene, camera);
+    }
+ 
+    animate();
+
+    // Enhanced mouse movement effect with higher camera movement range
+    document.addEventListener('mousemove', function(event) {
+        const halfWidth = window.innerWidth / 2;
+        const halfHeight = window.innerHeight / 2;
+
+        // Normalize mouse position (-1 to 1)
+        const mouseX = (event.clientX - halfWidth) / halfWidth;
+        const mouseY = -(event.clientY - halfHeight) / halfHeight;
+
+        // Adjust camera movement range for a more pronounced effect
+        const cameraLookRange = 8; // Higher range for more movement
+        camera.position.x = mouseX * cameraLookRange ; // +5 to maintain the original x-offset
+        camera.position.y = -mouseY * cameraLookRange + 5; // +5 to maintain the original y-offset
+
+        camera.lookAt(new THREE.Vector3(0, 0, 0));
+    });
+ 
+    // Animation loop and other functionalities remain the same
+</script>
+</body>
+</html>
